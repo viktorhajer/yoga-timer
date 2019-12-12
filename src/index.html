@@ -1,0 +1,232 @@
+<html>
+<head>
+  <title>YogaTimer</title>
+  <style>
+    body {
+      display: flex;
+      justify-content: flex-start;
+      flex-flow: column nowrap;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 12px;
+      padding: 0;
+      margin: 0;
+      color: darkcyan;
+    }
+
+    h1 {
+      margin: 8px;
+    }
+
+    #input-container {
+      width: 100vw;
+      padding: 10px;
+    }
+
+    #start-button,
+    #input-field {
+      padding: 5px 10px;
+      background: white;
+    }
+
+    #input-field {
+      width: calc(100vw - 100px);
+    }
+
+    #start-button {
+      width: 80px;
+      cursor: pointer;
+    }
+ 
+    #start-button:focus {
+      outline: 0;
+    }
+
+    #checkbox-container {
+      background: black;
+      padding: 4px 4px;
+      color: white;
+      margin: 0;
+      font-weight: bold;
+      width: 100vw;
+      display: flex;
+      align-items: center;
+    }
+
+    p {
+      margin: 5px;
+    }
+
+    .timers-container {
+      margin: 2px 10px 2px 0;
+      padding: 10px;
+      width: calc(50vw - 50px);
+      height: 100px;
+    }
+
+    .timers {
+      font-weight: bold;
+      font-size: 32px;
+      padding-left: 10px;
+    }
+
+    #pause-button {
+      font-weight: bold;
+      width: calc(50vw - 50px);
+      margin: 2px 0;
+      padding: 10px;
+      height: 100px;
+      font-size: 21px;
+      cursor: pointer;
+      height: 100px;
+    }
+
+    .lightborder {
+      border: 1px solid lightgray;
+      border-radius: 5px;
+    }
+
+    .flex {
+      display: flex; justify-content: center; align-items: center;
+    }
+  </style>
+</head>
+<body>
+  <h1>Yoga Timer</h1>
+  <div id="input-container">
+    <input type="text" id="input-field" value="3,30" class="lightborder">
+    <button id="start-button" class="lightborder">Start</button>
+    <br/>
+  </div>
+  <div id="checkbox-container">
+    <p class="flex"><input type="checkbox" id="loop-field">Loop</p>
+    <p class="flex"><input type="checkbox" id="countdown-field" checked>Countdown</p>
+  </div>
+  <div style="width: 100vw; margin-top: 10px;" class="flex">
+    <div class="timers-container lightborder">
+      <div><label>Total time: </label>
+        <div id="total-container" class="timers">00:00</div>
+      </div>
+      <div><label>Part time: </label>
+        <div id="part-container" class="timers">00:00</div>
+      </div>
+    </div>
+    <div id="pause-button" class="lightborder flex" style="display: none;">Pause</div>
+  </div>
+  <script>
+
+    const TIMER_SPEED = 1000; // 1 sec
+    const BEEP_DURATION = 1200; // 1,2 sec
+    const BEEP_FREQUENCY = 150; // Hz
+    const SECS_IN_MINUTE = 60;
+
+    const totalContainer = document.getElementById('total-container');
+    const partContainer = document.getElementById('part-container');
+    const startButton = document.getElementById('start-button');
+    const pauseButton = document.getElementById('pause-button');
+    const input = document.getElementById('input-field');
+
+    let partCounter = 0;
+    let totalCounter = 0;
+    let limit = 0;
+    let index = 0;
+    let times = [];
+    let paused = false;
+    let started = false;
+
+    startButton.addEventListener('click', () => {
+      startTimer();
+    });
+
+    pauseButton.addEventListener('click', () => {
+      if (started) {
+        paused = !paused;
+        if (!paused) {
+          processTimer();
+        }
+        pauseButton.innerHTML = paused ? 'Resume' : 'Pause';
+      }
+    });
+
+    function startTimer() {
+      index = 0;
+      started = true;
+      pauseButton.style.display = 'flex';
+      times = input.value.replace(/\./g, ',').split(',').map(n => n.trim());
+      input.value = times.join(',');
+      if (times.length > 0) {
+        limit = parseInt(times[index].trim());
+        partCounter = isCountdown() ? limit : 0;
+        totalCounter = 0;
+        processTimer();
+      }
+    }
+
+    function processTimer() {
+      if (!paused) {
+        const countdown = isCountdown();
+        partCounter += countdown ? -1 : 1;
+        totalCounter++;
+        if ((countdown && partCounter >= 0) || (!countdown && partCounter <= limit)) {
+          setTimeout(() => processTimer(), TIMER_SPEED);
+          updateTimer();
+        } else if ((index + 1) < times.length) {
+          index++;
+          nextTime();
+        } else if (isLooping()) {
+          index = 0;
+          nextTime();
+        } else {
+          started = false;
+          pauseButton.style.display = 'none';
+        }
+        if ((!countdown && partCounter === limit) || (countdown && partCounter === 0)) {
+          beep();
+        }
+      }
+    }
+
+    function nextTime() {
+      limit = parseInt(times[index].trim());
+      partCounter = isCountdown() ? (limit - 1) : 1;
+      setTimeout(() => processTimer(), TIMER_SPEED);
+      updateTimer();
+    }
+
+    function beep(duration = BEEP_DURATION, frequency = BEEP_FREQUENCY) {
+      const context = new AudioContext();
+      const oscillator = context.createOscillator();
+      oscillator.connect(context.destination);
+      oscillator.frequency.value = frequency;
+      oscillator.start();
+      setTimeout(() => oscillator.stop(), duration);
+    }
+
+    function isLooping() {
+      return isFieldChecked('loop-field');
+    }
+
+    function isCountdown() {
+      return isFieldChecked('countdown-field');
+    }
+
+    function isFieldChecked(fieldId) {
+      return document.getElementById(fieldId).checked === true;
+    }
+
+    function updateTimer() {
+      updateTimerValue(partContainer, partCounter);
+      updateTimerValue(totalContainer, totalCounter);
+    }
+
+    function updateTimerValue(container, value) {
+      const min = Math.floor(value / SECS_IN_MINUTE);
+      container.innerHTML = formatTime(min) + ':' + formatTime(value % SECS_IN_MINUTE);
+    }
+
+    function formatTime(value) {
+      return value > 9 ? value : '0' + value;
+    }
+
+  </script>
+</body>
+</html>
